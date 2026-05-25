@@ -1,0 +1,4 @@
+wp_admin_pwd=123456
+wp_user_pwd=123456
+
+ip addr show

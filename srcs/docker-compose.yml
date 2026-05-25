@@ -1,0 +1,88 @@
+services:
+
+  mariadb:
+    build: ./requirements/mariadb
+    image: mariadb
+    container_name: mariadb
+    env_file:
+      - .env
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    secrets:
+      - db_passwd
+      - db_root_passwd
+    networks:
+      - inception
+    restart: "unless-stopped"
+
+  wordpress:
+    init: true
+    build: ./requirements/wordpress
+    image: wordpress
+    container_name: wordpress
+    env_file:
+      - .env
+    volumes:
+      - wp_frontend:/var/www/html
+    secrets:
+      - db_passwd
+      - wp_passwd
+    depends_on:
+      - mariadb
+    healthcheck:
+      test: ["CMD", "test", "-f", "/tmp/wp-ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+    networks:
+      - inception
+    restart: "unless-stopped"
+
+  nginx:
+    build: ./requirements/nginx
+    image: nginx
+    container_name: nginx
+    ports:
+      - "443:443"
+    env_file:
+      - .env
+    volumes:
+      - wp_frontend:/var/www/html:ro
+    depends_on:
+      wordpress:
+        condition: "service_healthy"
+    networks:
+      - inception
+    restart: "unless-stopped"
+
+
+volumes:
+  mariadb_data:
+    driver: local
+    driver_opts:
+      type: none #type of volume, eg nfs
+      o:    bind #ways to connect
+      device: ${HOME}/${MYUSR}/data/mariadb #storage path
+
+  wp_frontend:
+    driver: local
+    driver_opts:
+      type:   none
+      o:      bind
+      device: ${HOME}/${MYUSR}/data/wp
+
+
+secrets:
+  db_passwd:
+    file: ../secrets/db_passwd.txt
+  db_root_passwd:
+    file: ../secrets/db_root_passwd.txt
+  wp_passwd:
+    file: ../secrets/credentials.txt
+
+# used to separate into different groups
+# services in same network can communicate w each other
+networks:
+  inception:
+    driver: bridge
