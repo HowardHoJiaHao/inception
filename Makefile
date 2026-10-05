@@ -11,7 +11,7 @@ all:
 
 init:
 	@if ! grep -q "^127.0.0.1[[:space:]]\+${DOMAIN_NAME}$$" /etc/hosts; then \
-		echo "Setting up domain name ..." \
+		echo "Setting up domain name ..."; \
 	 	sudo sh -c 'echo "127.0.0.1	${DOMAIN_NAME}" >> /etc/hosts'; \
 	 fi
 	@echo "Setting up volumes ..."
