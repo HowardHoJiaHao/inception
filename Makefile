@@ -1,5 +1,5 @@
 
-include ./srcs/.env
+-include ./srcs/.env
 
 COMPOSE_FILE=./srcs/docker-compose.yml
 
@@ -33,7 +33,6 @@ stop:
 # docker compose stop mariadb
 
 # docker compose exec mariadb mariadb -u root -p
-# <password>
 # use wordpress
 # SHOW TABLES;
 # exit
