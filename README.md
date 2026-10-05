@@ -1,47 +1,50 @@
-## Inception
-<div align="left">
-  <p><em>This project has been created as part of the 42 curriculum by hho-jia-</em></p><br>
-</div>
+# Inception
+
+> 42 Common Core · Rank 05
+
+*This project has been created as part of the 42 curriculum by hho-jia-*
 
 ## Table of Contents
 - [Description](#description)
+- [Architecture](#architecture)
 - [Setup Instructions](#setup-instructions)
+- [Testing](#testing)
+- [Other Notes](#other-notes)
 - [Documentation](#documentation)
 - [Resources](#resources)
 - [AI Usage](#ai-usage)
 
 ## Description
-Inception is a 42 project about learning concepts of system administration and virtualization using Docker. Every image must be build from base OS (Debian or Alpine). By the end of project, we will learn to setup a functional service running in isolated containers, via docker-compose.yml and Dockerfiles.
+Inception is a 42 project about learning the concepts of system administration and virtualization using **Docker**. Every image must be built from a base OS (Debian or Alpine; this project uses `debian:bookworm`), not pulled ready-made. By the end of the project, we learn to set up a functional service running in isolated containers, using a `docker-compose.yml` and our own Dockerfiles.
 
 ### Main Design Requirements
 **Containers:**
-- **NGINX** : Configured as reverse proxy, handling SSL/TLS v1.2, TLSv1.3, serves the website only via HTTPS, port `443`
-- **Wordpress** : Configure wordpress as website interface with php-fpm installed to manage cgi scripts
-- **MariaDB** : Configured as isolated container to store Wordpress data
+- **NGINX**: configured as a reverse proxy handling TLSv1.2 / TLSv1.3. It serves the website only via HTTPS, on port `443`
+- **WordPress**: the website, with php-fpm installed to run the PHP scripts
+- **MariaDB**: an isolated container that stores the WordPress data
 
 **Named Volumes:**
-- **Wordpress Volume** : Stores wordpress frontend website files
-- **MariaDB Volume** : Stores wordpress backend data
+- **WordPress Volume**: stores the WordPress website files
+- **MariaDB Volume**: stores the WordPress database
 
-**Docker Network** :
-- to isolate communication within required containers, preventing access between unrelated services
+**Docker Network:**
+- isolates communication between the required containers, preventing access between unrelated services
 
 <details>
 <summary><h3>Virtual Machines vs Docker</h3></summary>
 
-<!-- ### Virtual Machines vs Docker -->
 | | Virtual Machine | Docker Container |
 |---|---|---|
 | **Isolation** | Better isolation via hypervisor (eg. VMWare, VirtualBox) | Process-level isolation via kernel namespaces and cgroups, shared kernel requires careful configuration to avoid escapes |
 | **Size** | Larger size, full OS | Smaller size, only install necessary packages |
-| **Portablility** | Less portable, depends on hypervisor compatibility | Runs anywhere with Docker Engine |
+| **Portability** | Less portable, depends on hypervisor compatibility | Runs anywhere with Docker Engine |
 | **Resource usage** | High, reserves RAM & CPU | Minimal, uses only what is needed |
 | **Persistence** | Persistent by default | Ephemeral, uses volumes for persistent data |
 | **Use Case** | Running multiple OS environment, legacy applications | Microservices, CI/CD pipelines, software development |
 </details>
 
 <details>
-<summary><h3> Secrets vs Environment Variables </h3></summary>
+<summary><h3>Secrets vs Environment Variables</h3></summary>
 
 | | Secrets | Environment Variables |
 |---|---|---|
@@ -52,18 +55,17 @@ Inception is a 42 project about learning concepts of system administration and v
 </details>
 
 <details>
-<summary><h3> Docker Network vs Host Network </h3></summary>
+<summary><h3>Docker Network vs Host Network</h3></summary>
 
 | | Docker Network | Host Network |
 |---|---|---|
 | **Isolation** | Full isolation, containers have own network space | No isolation, uses host network directly |
 | **Port Mapping** | Must be explicitly mapped from host to container (`-p 8080:80`) | Not needed, host ports are directly accessible |
 | **Port Conflict** | Multiple containers can use same port as it is isolated, no conflicts | Only one container can use the specific port |
-
 </details>
 
 <details>
-<summary><h3> Docker Volumes vs Bind Mounts </h3></summary>
+<summary><h3>Docker Volumes vs Bind Mounts</h3></summary>
 
 | | Docker Volumes | Bind Mounts |
 |---|---|---|
@@ -72,74 +74,110 @@ Inception is a 42 project about learning concepts of system administration and v
 | **Location** | Managed by Docker | User needs to specify which directory path to mount |
 | **Migration** | Easier to backup & migrate | Difficult, depends on host directory and structure |
 | **Empty Behaviour** | Creates empty volume, can copy data from container if volume empty | Binds empty host directory, host overrides container existing contents |
-| **Accidental Modification** | Less likely, hidden in `/var/lib/docker/`volumes | More likely, especially if mixed with common paths (eg. `Desktop/`) |
-
+| **Accidental Modification** | Less likely, hidden in `/var/lib/docker/volumes` | More likely, especially if mixed with common paths (eg. `Desktop/`) |
 </details>
 
-<br><br>
+## Architecture
+```
+               HTTPS :443 (TLSv1.2 / TLSv1.3, self-signed certificate)
+  Browser  ─────────────────────────────────────────►  nginx
+                                                          │  FastCGI :9000
+                                                          ▼
+                                                  wordpress (php-fpm)
+                                                          │  SQL :3306
+                                                          ▼
+                                                       mariadb
+```
+- All three containers run on the private `inception` bridge network. Only NGINX publishes a port to the host (`443`).
+- The WordPress files are stored in `$HOME/<MYUSR>/data/wp` (NGINX mounts the same volume read-only to serve them), and the database in `$HOME/<MYUSR>/data/mariadb`, using the `HOME` and `MYUSR` values from `srcs/.env`.
+- Passwords are passed to the containers as **Docker secrets** (files under `/run/secrets/`), and the rest of the configuration comes from `srcs/.env`.
 
 ## Setup Instructions
 
 #### 0. Prerequisites
 - [Docker Engine](https://docs.docker.com/engine/install/) and [Docker Compose](https://docs.docker.com/compose/install/) must be installed on your machine.
-- macOS users may install a virtual machine to run `docker` & `docker compose`, such as [Docker Desktop](https://docs.docker.com/desktop/), [Colima](https://github.com/abiosoft/colima/blob/main/README.md), [UTM](https://mac.getutm.app/), or other vm of your choice
+- macOS users may install a virtual machine to run `docker` & `docker compose`, such as [Docker Desktop](https://docs.docker.com/desktop/), [Colima](https://github.com/abiosoft/colima/blob/main/README.md), [UTM](https://mac.getutm.app/), or another VM of your choice.
 
 #### 1. Clone the repository
 ```sh
-git clone <repo-url> inception
+git clone https://github.com/HowardHoJiaHao/inception.git
 cd inception
 ```
-#### 2. Setup .env keys
-- Copy `.env.example` and rename to `.env`
-- Change `<login>` into your chosen name, fill in the remaining fields with your chosen credentials. Ensure no spaces in between values.
 
-#### 3. Setup secrets
-- Copy `secrets.example`folder and rename to `secrets`
-- Add your own password in `db_passwd.txt`, `db_root_passwd.txt`
-- Fill in the fields with your chosen credentials in `credentials.txt`
+#### 2. Set up the `.env` keys
+- Copy `srcs/.env.example` to `srcs/.env`.
+- Remove the `#` in front of each key and fill in your values: your login, domain name and the database / WordPress settings. Make sure there are no spaces around the values.
+- Use real-looking email addresses for `WP_ADMIN_EMAIL` and `WP_USER_EMAIL`. WordPress rejects an address whose domain part ends with `-` (for example `admin@hho-jia-.42.fr`), and the installation then fails.
 
-#### 4. Build and start container
+#### 3. Set up the secrets
+- Copy the `secrets.example` folder to `secrets`.
+- Put your own passwords in `db_passwd.txt` and `db_root_passwd.txt`.
+- Fill in the WordPress passwords in `credentials.txt`.
+
+`srcs/.env` and `secrets/` are listed in `.gitignore`, so your real credentials are never committed.
+
+#### 4. Build and start the containers
 ```sh
-# first time run
+# first run
 make init && make up
 
-# consequent run
+# next runs
 make up
 ```
 
-#### 5.1 Access wordpress page
+| Command | What it does |
+|---|---|
+| `make` | Shows the available commands |
+| `make init` | Adds `127.0.0.1 <your domain>` to `/etc/hosts` (asks for `sudo`) and creates the data folders for the volumes |
+| `make up` | Builds the images and starts the containers in the background |
+| `make stop` | Stops the containers |
+| `make down` | Stops and removes the containers |
+
+#### 5.1 Access the WordPress page
 ```bash
 https://<login>.42.fr
 ```
 
-#### 5.2 Access wordpress admin page
+#### 5.2 Access the WordPress admin page
 ```bash
 https://<login>.42.fr/wp-admin
 ```
 
-<br>
+## Testing
+`test.sh` checks the running services:
+```sh
+./test.sh       # run all tests
+./test.sh 7     # run one test
+```
+
+| Test | Checks |
+|:---:|---|
+| 1 | HTTPS connection |
+| 2 | A simple PHP script |
+| 3 / 4 | WordPress admin login page / login page |
+| 5 | HTTP connection (should fail) |
+| 6 | The certificate, using `openssl` |
+| 7 / 8 | TLS v1.2 / TLS v1.3 connection |
+| 9 | TLS v1.1 connection (should fail) |
+
+> ⚠️ `./test.sh 100` stops and deletes **all** Docker containers, images, volumes and networks on the machine, not only this project's.
 
 ## Other Notes
-### What is TLS nginx
-TLS is Transport Layer Security protocol within nginx.
-- enable nginx to encrypt web traffic (using HTTPS), protect data from eavesdropping and tampering
-- secure communication between clients (like web browsers) and the server
+### What is TLS in NGINX
+TLS (Transport Layer Security) is the protocol NGINX uses to:
+- encrypt web traffic (HTTPS), protecting data from eavesdropping and tampering
+- secure the communication between clients (like web browsers) and the server
 
 ### What is PID 1
-PID 1 run as first process. Responsible for:
+PID 1 is the first process started in a container. It is responsible for:
 - Reaping zombie processes
-- Forwards signal such as SIGTERM & SIGINT to child process for graceful shutdown
+- Forwarding signals such as SIGTERM & SIGINT to child processes for a graceful shutdown
 
-If the executed cmd is not capable of handling signals, should start script with `tini -- your_script.sh` or add `init: true` in docker-compose file. 
-
-Else starting script with PID 1 will not exit when signal received
-
-<br>
+If the command run is not able to handle signals, start the script with `tini -- your_script.sh` or add `init: true` in the docker-compose file. Otherwise a script running as PID 1 will not exit when it receives a signal.
 
 ## Documentation
-- [User Documentation](USER_DOC.md)
+- [User Documentation](USR_DOC.md)
 - [Developer Documentation](DEV_DOC.md)
-<br><br>
 
 ## Resources
 - [Dockerfile practices explained!](https://youtu.be/ueTe-VQaD7c)
@@ -158,8 +196,6 @@ Else starting script with PID 1 will not exit when signal received
 - [VM vs Container](https://www.designgurus.io/blog/virtual-machines-vs-containers)
 - [Inception Medium Tutorial 1](https://medium.com/@imyzf/inception-3979046d90a0)
 - [Inception Medium Tutorial 2](https://medium.com/@ssterdev/inception-42-project-part-ii-19a06962cf3b)
-
-<br>
 
 ## AI Usage
 AI was used in this project as a tool to aid learning about docker container concepts, docker commands, troubleshooting, drafting tests, extend references, and drafting documentations. All code was reviewed, understood, written and adapted manually.
